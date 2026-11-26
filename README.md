@@ -1,3 +1,22 @@
+# MERLIN'S RADAR — a Merlin Trust fork
+
+This is **Merlin Smith's** fork of [Eiswolf-BG/eiswolfs-flightradar-CYD](https://github.com/Eiswolf-BG/eiswolfs-flightradar-CYD) —
+Eiswolf's excellent ADS-B flight-radar firmware for the CYD touchscreen. The base project and its credit
+are entirely **Eiswolf's**; we rebranded and extended it for The Digital Embassy / Merlin Trust fleet.
+
+**Branches:** `main` tracks upstream Eiswolf. **`merlin`** is our running build (based on the v6.8.0-era
+upstream + our changes below) — it is exactly the firmware flashed on our boards.
+
+What we changed on `merlin`:
+- 🦉 Branding pass in all 8 languages: MERLIN'S RADAR splash, boot menu, first-run welcome, MQTT announcements and test notifications
+- Wizard-owl boot cameo: 160×90 RGB565 bitmap LANCZOS-resampled from our wizard-owl portrait, blitted 1:1 with `pushImage` (see `src/owl_boot_img.h`, generator: LANCZOS from source portrait)
+- One `main.cpp`, two apps: full radar (`esp32dev` env) and a compact **Merlin status face app** (`buggy` env) for the CYD on our robot buggy — `merlin_status` (status JSON/HTTP + owl face) and `merlin_screen` (the dashboard face)
+- Boot menu (Merlin face / Flight Radar) for the buggy variant
+
+Build: PlatformIO — `pio run -e esp32dev` (radar, CYD) or `pio run -e buggy` (face). Flash over USB.
+
+---
+
 # Eiswolfs Flightradar (CYD)
 
 A live ADS-B flight radar running on the ESP32 "Cheap Yellow Display" (CYD,

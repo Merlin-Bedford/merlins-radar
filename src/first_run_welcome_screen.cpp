@@ -20,7 +20,7 @@ namespace {
     // screen runs BEFORE language selection (see first_run_language_screen.cpp
     // for the same pattern with "Language / Sprache"), so no language has
     // been chosen yet.
-    constexpr const char* TITLE = "Welcome to Eiswolfs Flightradar!";
+    constexpr const char* TITLE = "Welcome to Merlin's Radar!";
 
     // Centered, bold (1px-offset technique, same as the "Flightradar"
     // button in first_run_complete_screen.cpp) word-wrapped title -

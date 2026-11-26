@@ -1,6 +1,7 @@
 #include "splash_screen.h"
 #include "menu_stars.h"
 #include "radar_logo.h"
+#include "owl_boot_img.h"
 #include "i18n.h"
 #include <math.h>
 #include "ui_theme.h"
@@ -97,6 +98,17 @@ void playBootSequence(TFT_eSPI& tft) {
     tft.drawString(I18n::t(StringId::BOOT_TITLE), tft.width() / 2, BOOT_TITLE_Y);
     delayWithStars(tft, BOOT_TITLE_PAUSE_MS);
 
+    // MERLIN cameo (founder brand pass, 26/11): the wizard owl between the
+    // title and the boot lines. owl_boot_img.h = 160x90 RGB565, LANCZOS-
+    // resized on the host from the source portrait (the first pass skipped
+    // every 2nd pixel straight on the device = blurry/messy per founder,
+    // and drawPixel used the wrong byte order for this panel - pushImage
+    // wants the byte-swapped words, same as the face screen does).
+    {
+        const int16_t ox = (tft.width() - OWL_BOOT_W) / 2, oy = 56;
+        tft.pushImage(ox, oy, OWL_BOOT_W, OWL_BOOT_H, OWL_BOOT);
+    }
+
     // Boot-Zeilen bauen sich nacheinander auf ("Split-Flap"-Optik ohne
     // echte Hoch-/Runterschiebe-Animation, siehe Bahnhofstafel-Vorbild) -
     // jede Zeile wird einzeln gezeichnet und bekommt danach eine spuerbare
@@ -127,8 +139,8 @@ void begin(TFT_eSPI& tft) {
 
     tft.setTextColor(UiTheme::accentColor(tft), TFT_BLACK);
     tft.setTextSize(2);
-    tft.drawString("Eiswolfs", cx, 28);
-    tft.drawString("Flightradar", cx, 60);
+    tft.drawString("MERLIN'S", cx, 28);
+    tft.drawString("RADAR", cx, 60);
 
     tft.setTextDatum(TL_DATUM);
     tft.setTextSize(1);

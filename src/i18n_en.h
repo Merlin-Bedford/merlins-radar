@@ -547,7 +547,7 @@ static const char* const I18N_EN[] = {
     "ntfy.sh is a free push notification service - no account needed. Install the free ntfy app on your phone and subscribe to the same topic name you enter here; any message sent to that topic then shows up as a notification. On the free public server, the topic name is NOT a secret - anyone who knows (or guesses) it could read your notifications, so pick something unique and hard to guess, not a simple word.",
     "Emergency squawk ",
     "Watchlist match: ",
-    "Test notification from Eiswolfs Flightradar ✅",
+    "Test notification from Merlin's Radar ✅",
 
     "Session Stats",
     "Session Stats",

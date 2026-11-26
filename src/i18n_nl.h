@@ -548,7 +548,7 @@ static const char* const I18N_NL[] = {
     "ntfy.sh is een gratis pushmeldingsdienst - geen account nodig. Installeer de gratis ntfy-app op je telefoon en abonneer je op dezelfde topic-naam die je hier invoert; elk bericht dat naar die topic wordt gestuurd, verschijnt dan als melding. Op de gratis openbare server is de topic-naam NIET geheim - wie hem kent (of raadt) kan je meldingen lezen. Kies dus iets unieks en moeilijk te raden, geen simpel woord.",
     "Noodsquawk ",
     "Volglijst-treffer: ",
-    "Testmelding van Eiswolfs Flightradar ✅",
+    "Testmelding van Merlin's Radar ✅",
 
     "Sessiestatistiek",
     "Sessiestatistiek",

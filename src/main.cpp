@@ -1,3 +1,220 @@
+// =====================================================================
+// MERLIN'S RADAR (Merlin Smith's branded fork of Eiswolf-BG's
+// eiswolfs-flightradar-CYD v6.8.0). Two mains in one file:
+//   * env:esp32dev  -> the full radar app (upstream main, rebranded,
+//                     + our ISS-marker additions in other files)
+//   * env:buggy     -> the little Merlin FACE app for the buggy's
+//                     dashboard screen (UART2 status feed, v1.5)
+// Upstream attribution kept in HTTP User-Agents on purpose.
+// =====================================================================
+
+#ifdef MERLIN_BUGGY
+
+// ---------- buggy variant: Merlin face main (unchanged since 06/11) ----------
+
+#include <Arduino.h>
+#include <TFT_eSPI.h>
+#include <SD.h>
+#include <WiFi.h>
+#include <time.h>
+#include <WebServer.h>
+#include "ui_theme.h"
+#include "config.h"
+#include "sd_storage.h"
+#include "touch_input.h"
+#include "i18n.h"
+#include "merlin_status.h"
+#include "merlin_screen.h"
+
+TFT_eSPI tft;
+
+uint32_t lastMerlinFrameMs = 0;
+const uint32_t MERLIN_FRAME_MS = 200;
+
+// Simple WiFi manager (no SD card dependency)
+bool wifiConnected = false;
+String wifiSSID = "";
+
+void showWifiSetup() {
+    tft.fillScreen(0x111);
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(2);
+    tft.setCursor(4, 10);
+    tft.print("WiFi Setup");
+
+    tft.setTextSize(1);
+    tft.setTextColor(0xAAA);
+    tft.setCursor(4, 35);
+    tft.print("Available networks:");
+
+    // Scan networks
+    tft.setCursor(4, 50);
+    tft.setTextColor(TFT_WHITE);
+    tft.print("Scanning...");
+
+    int n = WiFi.scanNetworks();
+    tft.fillRect(0, 50, Config::SCREEN_WIDTH, 200, 0x111);
+
+    if (n == 0) {
+        tft.setCursor(4, 50);
+        tft.setTextColor(TFT_RED);
+        tft.print("No networks found!");
+        tft.setCursor(4, 70);
+        tft.setTextColor(0xAAA);
+        tft.print("Tap anywhere to retry.");
+        // Wait for tap
+        TouchInput::Point tap;
+        while (!TouchInput::wasTapped(tap)) delay(50);
+        showWifiSetup();
+        return;
+    }
+
+    // Show top 5 networks
+    int show = min(n, 5);
+    for (int i = 0; i < show; i++) {
+        int16_t y = 55 + i * 22;
+        tft.setTextColor(WiFi.SSID(i).indexOf("SKYNET") >= 0 ? TFT_GREEN : TFT_WHITE);
+        tft.setCursor(4, y);
+        tft.print(WiFi.SSID(i));
+        tft.setCursor(Config::SCREEN_WIDTH - 40, y);
+        tft.print(String(WiFi.RSSI(i)) + "dB");
+    }
+
+    tft.setCursor(4, 55 + show * 22 + 10);
+    tft.setTextColor(0xAAA);
+    tft.print("Tap a network to connect.");
+
+    // Wait for tap
+    TouchInput::Point tap;
+    while (true) {
+        if (TouchInput::wasTapped(tap)) {
+            // Determine which network was tapped
+            int idx = -1;
+            for (int i = 0; i < show; i++) {
+                int16_t y = 55 + i * 22;
+                if (tap.y >= y && tap.y <= y + 18) {
+                    idx = i;
+                    break;
+                }
+            }
+
+            if (idx >= 0) {
+                String ssid = WiFi.SSID(idx);
+                tft.fillScreen(0x111);
+                tft.setTextColor(TFT_WHITE);
+                tft.setTextSize(2);
+                tft.setCursor(4, 100);
+                tft.print("Connecting to");
+                tft.setCursor(4, 125);
+                tft.print(ssid);
+                tft.setTextSize(1);
+                tft.setTextColor(0xAAA);
+                tft.setCursor(4, 155);
+                tft.print("Please enter password...");
+                tft.print("(not implemented yet)");
+
+                // For now, try to connect with empty password
+                WiFi.begin(ssid.c_str(), "");
+                uint32_t start = millis();
+                while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+                    delay(500);
+                    tft.print(".");
+                }
+
+                if (WiFi.status() == WL_CONNECTED) {
+                    wifiConnected = true;
+                    wifiSSID = ssid;
+                    Serial.printf("WiFi connected: %s -> %s\n", ssid.c_str(), WiFi.localIP().toString().c_str());
+                    return;
+                } else {
+                    tft.fillScreen(0x300);
+                    tft.setTextColor(TFT_WHITE);
+                    tft.setTextSize(2);
+                    tft.setCursor(4, 100);
+                    tft.print("FAILED");
+                    tft.setTextSize(1);
+                    tft.setCursor(4, 130);
+                    tft.print("Tap to retry.");
+                    while (!TouchInput::wasTapped(tap)) delay(50);
+                    showWifiSetup();
+                }
+            }
+        }
+        delay(20);
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(300);
+    Serial.println("=== CYD - Merlin Status ===");
+
+    tft.init();
+    tft.setRotation(3);  // 270° = landscape, text reads correctly
+    tft.fillScreen(TFT_BLACK);
+
+    // Try WiFi (non-blocking, 5 sec timeout)
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(2);
+    tft.setCursor(4, 120);
+    tft.print("MERLIN");
+    tft.setTextSize(1);
+    tft.setCursor(4, 150);
+    tft.print("Starting up...");
+
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
+
+    // Try saved credentials (from NVS)
+    WiFi.begin();
+    uint32_t start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 5000) {
+        delay(200);
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        wifiConnected = true;
+        wifiSSID = WiFi.SSID();
+        Serial.printf("WiFi: %s -> %s\n", wifiSSID.c_str(), WiFi.localIP().toString().c_str());
+        configTime(0, 0, "pool.ntp.org", "time.google.com");
+    } else {
+        // Buggy doctrine (v1.5): never block the face on WiFi. The UART2 feed
+        // keeps the screen alive with no network at all, so we just continue.
+        // (Touch setup screen still reachable via the bench build if needed.)
+        Serial.println("WiFi: not connected, continuing (UART feed still live)");
+    }
+
+    // Start Merlin (safe: WebServer won't crash if WiFi is down)
+    MerlinStatus::begin();
+    MerlinScreen::begin(tft);
+    MerlinScreen::update(tft);
+
+    Serial.println("=== Merlin ready ===");
+}
+
+void loop() {
+    MerlinStatus::update();
+
+    uint32_t now = millis();
+    if (now - lastMerlinFrameMs >= MERLIN_FRAME_MS) {
+        lastMerlinFrameMs = now;
+        MerlinScreen::update(tft);
+    } else {
+        delay(5);
+    }
+
+    TouchInput::Point tap;
+    if (TouchInput::wasTapped(tap)) {
+        if (MerlinStatus::emergencyActive()) {
+            MerlinStatus::clearEmergency();
+        }
+    }
+
+    delay(5);
+}
+
+#else  // ---------- MERLIN'S RADAR: full radar app ----------
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -2328,3 +2545,4 @@ void loop() {
         ScreensaverSnow::update(tft);
     }
 }
+#endif  // MERLIN_BUGGY

@@ -546,7 +546,7 @@ static const char* const I18N_ES[] = {
     "ntfy.sh es un servicio gratuito de notificaciones push, sin necesidad de cuenta. Instala la app gratuita ntfy en tu teléfono y suscríbete al mismo nombre de tema que introduces aquí; cualquier mensaje enviado a ese tema aparecerá como notificación. En el servidor público gratuito, el nombre del tema NO es secreto - cualquiera que lo conozca (o lo adivine) podría leer tus notificaciones. Elige algo único y difícil de adivinar, no una palabra simple.",
     "Código squawk de emergencia ",
     "Coincidencia en la lista de vigilancia: ",
-    "Notificación de prueba de Eiswolfs Flightradar ✅",
+    "Notificación de prueba de Merlin's Radar ✅",
 
     "Estadísticas de sesión",
     "Estadísticas de sesión",

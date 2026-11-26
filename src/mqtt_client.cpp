@@ -123,13 +123,13 @@ namespace {
         JsonObject device = doc["device"].to<JsonObject>();
         JsonArray ids = device["identifiers"].to<JsonArray>();
         ids.add(nodeId());
-        device["name"] = "Eiswolfs Flightradar";
+        device["name"] = "Merlin's Radar";
         device["manufacturer"] = "Eiswolf-BG";
         device["model"] = "CYD (ESP32-2432S028)";
         device["sw_version"] = Config::APP_VERSION;
 
         JsonObject origin = doc["origin"].to<JsonObject>();
-        origin["name"] = "Eiswolfs Flightradar";
+        origin["name"] = "Merlin's Radar";
         origin["sw_version"] = Config::APP_VERSION;
 
         String out;

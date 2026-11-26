@@ -546,7 +546,7 @@ static const char* const I18N_TR[] = {
     "ntfy.sh, hesap gerektirmeyen ücretsiz bir push bildirim hizmetidir. Telefonuna ücretsiz ntfy uygulamasını kur ve burada girdiğin aynı konu adına abone ol - o konuya gönderilen her mesaj bir bildirim olarak görünür. Ücretsiz genel sunucuda konu adı GİZLİ DEĞİLDİR - onu bilen ya da tahmin eden herkes bildirimlerini okuyabilir. Bu yüzden benzersiz, tahmin edilmesi zor bir isim seç, basit bir kelime değil.",
     "Acil durum squawk kodu ",
     "Takip listesi eşleşmesi: ",
-    "Eiswolfs Flightradar'dan test bildirimi ✅",
+    "Merlin's Radar'dan test bildirimi ✅",
 
     "Oturum İstatistiği",
     "Oturum İstatistiği",
