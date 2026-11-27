@@ -84,6 +84,20 @@ namespace Config {
     // gleiches Prinzip wie NIGHT_DIM_REDUCTION_PERCENT.
     constexpr uint8_t SCREENSAVER_DIM_REDUCTION_PERCENT = 75;
 
+    // MERLIN-PATCH 2026-11-27 - TOUCH-ENTPRELLUNG (Druckschwelle). Der
+    // XPT2046-Controller meldet auf diesem Board sporadisch beruehrungen mit
+    // pressure (z) = 0 bzw. sehr kleinen Werten - im Serien-Log dieses Boards
+    // eindeutig belegt: [AUTOSELECT-DIAG] ... rawZ=0 und rawZ=1072 ohne dass
+    // jemand das Panel angefasst hat (upstream nennt dasselbe Phantom-Problem
+    // in CLAUDE.md unter 'automatische Neu-Auswahl eines Flugzeugs ohne
+    // Touch-Eingabe'). Jede solche Geister-Beruehrung setzt in loop()
+    // lastInteractionMs zurueck -> der Bildschirm-Timeout/Ruhebildschirm
+    // springt gefuehlt NIE an, und auf dem Radarschirm wird ein Flugzeug
+    // angetippt, das niemand antippt. Proben mit z unter dieser Schwelle
+    // zaehlen deshalb als NICHT beruehrt. Echtes Tippen liegt auf diesem Panel
+    // typisch bei z ~ 700-2500 (Kalibrierung funktioniert damit problemlos).
+    constexpr int TOUCH_Z_MIN = 200;
+
     // MERLIN-PATCH 2026-11-27 - AUTOWAKE aus dem Ruhebildschirm (Founder-
     // Wunsch, 12:25): "...anytime an aircraft comes in the 10km range, then go
     // from screen saver to radar mode, then when aircraft leaves the 10km,

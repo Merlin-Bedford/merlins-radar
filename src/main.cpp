@@ -2347,6 +2347,12 @@ void loop() {
             tapped = false;
 
             if (screensaverShowing) {
+                // MERLIN-PATCH 2026-11-27 - Diagnose-Log: unterscheidet im Log
+                // ein ANTIPPEN (echter Tap ODER spuerbarer Touch vom XPT2046,
+                // bekannte Fehlerklasse, siehe CLAUDE.md 'automatische
+                // Neu-Auswahl ohne Touch') vom automatischen AutoWake.
+                Serial.printf("[AutoWake] Ruhebildschirm verlassen durch TOUCH bei %lu ms (z=%d)\n",
+                              (unsigned long)millis(), (int)TouchInput::lastRawSample().z);
                 // Der Ruhebildschirm hat den kompletten Bildschirminhalt
                 // ueberschrieben (Sternenhimmel + Uhrzeit) - anders als beim
                 // normalen Timeout (nur Backlight aus, Inhalt blieb im
@@ -2579,6 +2585,19 @@ void loop() {
     }
 
     uint8_t timeoutMin = SettingsStore::screenTimeoutMinutes();
+    // MERLIN-PATCH 2026-11-27 - Diagnose (Serie, alle 30 s): zeigt die nackten
+    // Timeout-Werte, damit sich eine ausbleibende Ruhebildschirm-Periode von
+    // der nächsten Beobachtungsrunde mechanisch erklären lässt (Abstand seit
+    // letzter Interaktion vs. eingestellte Minuten) - statt Raten.
+    {
+        static uint32_t dbgIdleMs = 0;
+        if (!screensaverShowing && nowMs - dbgIdleMs >= 30000) {
+            dbgIdleMs = nowMs;
+            Serial.printf("[Timeout-DIAG] min=%u dimmed=%d screensaver=%d idle=%lums autowake=%d\n",
+                          (unsigned)timeoutMin, (int)screenDimmed, (int)screensaverShowing,
+                          (unsigned long)(nowMs - lastInteractionMs), (int)autoWakeActive);
+        }
+    }
     // MERLIN-PATCH 2026-11-27 - Autowake-Reset: ist der Bildschirm nur wegen
     // eines Autowake wach und ist seit HYSTERESIS ms kein Flugzeug mehr
     // innerhalb des Radius,zurueck in den Ruhebildschirm (derselbe

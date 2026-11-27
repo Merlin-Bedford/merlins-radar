@@ -104,6 +104,15 @@ Point rawPoint() {
     p.touched = touch.touched();
     if (p.touched) {
         TS_Point raw = touch.getPoint();
+        // MERLIN-PATCH 2026-11-27 - Geister-Beruehrungen aussortieren (naehere
+        // Begruindung bei Config::TOUCH_Z_MIN in config.h): Proben ohne
+        // echten Druck (z zu klein) werden als "nicht beruehrt" behandelt, so
+        // dass weder der Inaktivitaets-/Ruhebildschirm-Timeout zurueckgesetzt
+        // noch ein Flugzeug auf dem Radarschirm unaufgefordert ausgewaehlt wird.
+        if (raw.z < Config::TOUCH_Z_MIN) {
+            p.touched = false;
+            return p;
+        }
         p.x = raw.x;
         p.y = raw.y;
         // TEST DIAG - siehe RawSample oben, rein passives Mitschreiben.
