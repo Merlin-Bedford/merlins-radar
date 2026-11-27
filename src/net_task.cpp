@@ -155,7 +155,12 @@ namespace {
             // Intervall (Config::OTA_BACKGROUND_CHECK_INTERVAL_MS, siehe
             // ota_update.cpp) - hier einfach jede Schleife mit aufrufen,
             // genau wie Weather::update() oben.
-            OtaUpdate::pollBackground();
+            // MERLIN-PATCH 2026-11-27 - Hintergrund-Update-Check vom Gründer
+            // deaktiviert (Config::OTA_UPDATES_ENABLED, siehe config.h): keine
+            // GitHub-Abfrage mehr, kein roter Punkt, keine Update-Werbung.
+            if (Config::OTA_UPDATES_ENABLED) {
+                OtaUpdate::pollBackground();
+            }
             // Holt einen beim Boot mangels WLAN fehlgeschlagenen (oder noch
             // nie versuchten) Download der Flughafendatenbank nach (siehe
             // sd_storage.cpp) - kuemmert sich intern selbst um ihr eigenes,

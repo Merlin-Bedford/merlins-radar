@@ -1594,6 +1594,12 @@ void enterScreensaver() {
     lastScreensaverAircraftText = "";
     lastScreensaverThemeIndex = SettingsStore::radarThemeIndex();
     lastScreensaverClockMs = 0; // sofortiges erstes Zeichnen erzwingen
+    // MERLIN-PATCH 2026-11-27 - Diagnose-Log (Serie): damit ist im Log sichtbar,
+    // WANN der Ruhebildschirm begann - noetig um die AutoWake-Zustaende zu
+    // beurteilen (kein AutoWake = korrekt, wenn der Luftraum seit dem Eintritt
+    // nie wirklich leer war).
+    Serial.printf("[AutoWake] Ruhebildschirm begonnen, Radius %.0f km, Hysterese %lu ms\n",
+                  (double)autoWakeRadiusKm(), (unsigned long)Config::AUTOWAKE_HYSTERESIS_MS);
 }
 
 void updateWifiIcon() {

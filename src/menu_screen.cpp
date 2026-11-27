@@ -1363,14 +1363,23 @@ void run(TFT_eSPI& tft, bool startAtFilters, bool startAtSystem) {
             // Check) eins gefunden hat - der eigentliche Tastendruck fuehrt
             // trotzdem immer noch zu einem frischen checkForUpdate()-Aufruf
             // in runOtaUpdateScreen(), diese Zeile ist nur eine Vorschau.
-            String checkUpdateLine1 = OtaUpdate::isUpdateAvailable()
-                ? String(I18n::t(StringId::OTA_UPDATE_AVAILABLE_PREFIX)) + OtaUpdate::availableVersion()
-                : String(I18n::t(StringId::CHECK_UPDATE_VERSION_PREFIX)) + Config::APP_VERSION;
+            // MERLIN-PATCH 2026-11-27 - Update-Knopf vom Gruender entfernt
+            // (Config::OTA_UPDATES_ENABLED=false): zeigt jetzt nur noch die
+            // eigene Version und den Hinweis, dass es keine Update-Suche mehr
+            // gibt ("my MERLIN is the BEST update").
+            String checkUpdateLine1 = (!Config::OTA_UPDATES_ENABLED)
+                ? String(I18n::t(StringId::CHECK_UPDATE_VERSION_PREFIX)) + Config::APP_VERSION
+                : (OtaUpdate::isUpdateAvailable()
+                       ? String(I18n::t(StringId::OTA_UPDATE_AVAILABLE_PREFIX)) + OtaUpdate::availableVersion()
+                       : String(I18n::t(StringId::CHECK_UPDATE_VERSION_PREFIX)) + Config::APP_VERSION);
+            String checkUpdateLine2 = Config::OTA_UPDATES_ENABLED
+                ? I18n::t(StringId::MENU_CHECK_UPDATE)
+                : String("Updates closed - ask MERLIN");
             tft.setTextDatum(MC_DATUM);
             tft.setTextColor(UiTheme::accentColor(tft), TFT_BLACK);
             constexpr int16_t UPDATE_LINE_GAP = 14;
             tft.drawString(checkUpdateLine1, updateHalf.x + updateHalf.w / 2, updateHalf.y + updateHalf.h / 2 - UPDATE_LINE_GAP / 2);
-            tft.drawString(I18n::t(StringId::MENU_CHECK_UPDATE), updateHalf.x + updateHalf.w / 2, updateHalf.y + updateHalf.h / 2 + UPDATE_LINE_GAP / 2);
+            tft.drawString(checkUpdateLine2, updateHalf.x + updateHalf.w / 2, updateHalf.y + updateHalf.h / 2 + UPDATE_LINE_GAP / 2);
             tft.setTextDatum(TL_DATUM);
             if (OtaUpdate::isUpdateAvailable()) {
                 // Gleicher kleiner roter Punkt wie an den anderen Stellen
@@ -1485,7 +1494,20 @@ void run(TFT_eSPI& tft, bool startAtFilters, bool startAtSystem) {
             } else if (toolsBtn.contains(tap.x, tap.y)) {
                 page = Page::SystemTools;
             } else if (updateHalf.contains(tap.x, tap.y)) {
-                runOtaUpdateScreen(tft);
+                // MERLIN-PATCH 2026-11-27 - mit deaktivierter OTA-Automatik
+                // fuehrt der Knopf NICHT mehr zur Update-Suche (die die
+                // Merlin-Patches ueberschreiben wuerde), sondern zeigt nur die
+                // eigene Version.
+                if (Config::OTA_UPDATES_ENABLED) {
+                    runOtaUpdateScreen(tft);
+                } else {
+                    showInfoScreen(tft, I18n::t(StringId::MENU_CATEGORY_SYSTEM),
+                                   String("MERLIN'S RADAR v") + Config::APP_VERSION +
+                                       "\n\nUpdate-Suche ist deaktiviert.\n"
+                                       "Updates closed - ask MERLIN.\n"
+                                       "(my MERLIN is the BEST update)",
+                                   UiTheme::accentColor(tft), I18n::t(StringId::OK));
+                }
             } else if (ledHalf.contains(tap.x, tap.y)) {
                 SettingsStore::setUpdateLedSignalEnabled(!SettingsStore::updateLedSignalEnabled());
             } else if (backBtn.contains(tap.x, tap.y)) {

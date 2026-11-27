@@ -225,6 +225,14 @@ namespace Config {
     // Anfragen/Stunde - bei mehreren Geraeten an derselben Heim-IP
     // entsprechend vervielfacht, im Blick behalten, falls das Limit je
     // erreicht wird.
+    // MERLIN-PATCH 2026-11-27 - OTA-Automatik AUS (Gründer-Wunsch: "You can edit
+    // out/Remove the update feature as we dont need that. my MERLIN is the BEST
+    // update"). Der Hintergrund-Check (alle 3 Minuten GitHub-Releases) warb
+    // ständig für das UPSTREAM-Firmware-Paket und hätte bei einem Tipp beide
+    // Merlin-Patches (Feed-Quelle + AutoWake) überschrieben. false = es wird
+    // NIEMALS mehr nach einem Update gefragt, kein roter Punkt, kein LED-
+    // Signal; der Code bleibt erhalten und ist mit true jederzeit reaktivierbar.
+    constexpr bool OTA_UPDATES_ENABLED = false;
     constexpr uint32_t OTA_BACKGROUND_CHECK_INTERVAL_MS = 3UL * 60UL * 1000UL; // 3 Minuten
 
     // Inaktivitaets-Timeout INNERHALB von Vollbild-Menues/Einstellungs-
