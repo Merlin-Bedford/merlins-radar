@@ -109,7 +109,7 @@ void primeTime() {
 }
 
 FetchResult fetch(double homeLat, double homeLon, float radiusKm,
-                   Aircraft* table, uint8_t tableCapacity) {
+                   Aircraft* table, uint8_t tableCapacity, uint8_t source) {
     FetchResult result;
 
     if (WiFi.status() != WL_CONNECTED) {
@@ -122,11 +122,18 @@ FetchResult fetch(double homeLat, double homeLon, float radiusKm,
         clientConfigured = true;
     }
 
+    // MERLIN-PATCH 2026-11-27: Quelle 0 = adsb.fi Opendata (keylos, Array
+    // "aircraft", Pfad "/api/v2"), Quelle 1 = adsb.lol (upstream, Array
+    // "ac", Pfad "/v2", keylos nur 500 Requests/Tag pro IP).
+    const char* apiHost = (source == 0) ? Config::ADSB_API_HOST : Config::ADSB_FALLBACK_HOST;
+    const char* apiPath = (source == 0) ? Config::ADSB_API_PATH : Config::ADSB_FALLBACK_PATH;
+    const char* jsonKey = (source == 0) ? Config::ADSB_JSON_KEY : Config::ADSB_FALLBACK_JSON_KEY;
+
     HTTPClient http;
     char url[160];
     snprintf(url, sizeof(url),
-             "https://%s/v2/lat/%.5f/lon/%.5f/dist/%.0f",
-             Config::ADSB_API_HOST, homeLat, homeLon, radiusKm);
+             "https://%s%s/lat/%.5f/lon/%.5f/dist/%.0f",
+             apiHost, apiPath, homeLat, homeLon, radiusKm);
 
     http.setTimeout(Config::ADSB_HTTP_TIMEOUT_MS);
     if (!http.begin(persistentClient, url)) {
@@ -197,7 +204,7 @@ FetchResult fetch(double homeLat, double homeLon, float radiusKm,
     filter["category"]  = true;
 
     Stream& stream = http.getStream();
-    if (!skipToArrayStart(stream, "\"ac\":", 512)) {
+    if (!skipToArrayStart(stream, jsonKey, 512)) {
         http.end();
         result.ok = false;
         return result;
@@ -577,6 +584,11 @@ FetchResult fetch(double homeLat, double homeLon, float radiusKm,
     http.end();
     result.ok = true;
     result.aircraftCount = idx;
+    // MERLIN-PATCH 2026-11-27: Diagnostic-Zeile, damit an der Seriellen
+    // sichtbar ist, WELCHE Quelle wie viele Flugzeuge geliefert hat
+    // (Seriel-Log war bisher bei Erfolg stumm - genau deshalb war der
+    // "keine Flugzeuge"-Fall nur an der 429-Zeile erkennbar).
+    Serial.printf("[AdsbClient] Quelle %d (%s) ok, Flugzeuge=%d\n", source, apiHost, idx);
     return result;
 }
 

@@ -254,6 +254,27 @@ namespace {
                                                      tempTable, Config::MAX_TRACKED_AIRCRAFT);
                     uint32_t fetchDurationMs = millis() - fetchStartMs;
 
+                    // MERLIN-PATCH 2026-11-27 - QUELLEN-FALLBACK: liefert
+                    // Quelle 0 (adsb.fi Opendata) einen harten Fehler ODER
+                    // HTTP 200 mit null Flugzeugen (genau der frueher von
+                    // upstream beobachtete adsb.fi-Fall), dieselbe Abfrage
+                    // sofort gegen Quelle 1 (adsb.lol) wiederholen. table[]
+                    // enthaelt dann ggf. schon Teilergebnisse - der Parser
+                    // setzt jedes Feld pro Objekt zurueck und ignoriert
+                    // Doppelgaenger per Hex-Code, ein Durchlauf mit 0 Objekten
+                    // veraendert die Tabelle also nicht.
+                    if ((!result.ok || result.aircraftCount == 0) && result.httpCode != 429) {
+                        Serial.printf("[NetTask] Quelle 0 leer/fehlgeschlagen (HTTP %d, n=%d) - versuche Fallback\n",
+                                      result.httpCode, result.aircraftCount);
+                        uint32_t fbStartMs = millis();
+                        auto fb = AdsbClient::fetch(lat, lon, rangeKm, tempTable,
+                                                   Config::MAX_TRACKED_AIRCRAFT, 1);
+                        fetchDurationMs += millis() - fbStartMs;
+                        if (fb.ok && fb.aircraftCount > 0) {
+                            result = fb;
+                        }
+                    }
+
                     // Feature 5 "Verbindungsqualitaet" - bei JEDEM
                     // Abrufversuch aktualisiert, unabhaengig vom Ergebnis
                     // (anders als AircraftTable::markFetchSuccess() unten,

@@ -121,7 +121,23 @@ namespace Config {
     // gegen den ESP32-Client (per curl vom selben Netzwerk kamen jederzeit
     // volle Daten). adsb.lol hat identisches URL-/JSON-Schema (nur "/v2/..."
     // statt "/api/v3/...", Feldnamen unveraendert), daher direkt austauschbar.
-    constexpr const char* ADSB_API_HOST = "api.adsb.lol";
+    //
+    // MERLIN-PATCH 2026-11-27 (Quelle gewechselt): adsb.lol verlangt jetzt
+    // einen API-Key bzw. drosselt keylos auf 500 Requests/24h pro IP
+    // (HTTP 429 + x-ratelimit-limit: 500;w=86400) - unser 10s-Takt haette
+    // 8.640 Requests/Tag gebraucht, der Radar war also nach ~35 Minuten
+    // trocken. NEUE PRIMAERQUELLE: adsb.fi Opendata-API (keylos, identisches
+    // readsb-Schema, Array heisst dort "aircraft" statt "ac", Pfad "/api/v2"
+    // statt "/v2"). adsb.lol bleibt als FALLBACK Quelle 2 erhalten (sie
+    // funktioniert wieder, sobald das Tageskontingent sich resetzt). live
+    // verifiziert vom PC: 60km => HTTP 200, 146 Flugzeuge, 84 KB.
+    constexpr const char* ADSB_API_HOST = "opendata.adsb.fi";
+    constexpr const char* ADSB_API_PATH = "/api/v2";
+    constexpr const char* ADSB_JSON_KEY = "\"aircraft\":";
+    // Fallback-Quelle (upstream-Verhalten von vor diesem Patch):
+    constexpr const char* ADSB_FALLBACK_HOST = "api.adsb.lol";
+    constexpr const char* ADSB_FALLBACK_PATH = "/v2";
+    constexpr const char* ADSB_FALLBACK_JSON_KEY = "\"ac\":";
     constexpr uint16_t ADSB_API_PORT = 443;
     // TESTWEISE von 8000 auf 10000 erhoeht (siehe Absprache mit Karl) - nach
     // vereinzelten HTTP 429 von adsb.lol etwas serverfreundlicher, aber
