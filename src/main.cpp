@@ -1581,6 +1581,10 @@ namespace ScreensaverSnow {
 // Autowake-Reset benutzt, damit beide Pfade garantiert identisch aufraeumen.
 void enterScreensaver() {
     screensaverShowing = true;
+    // MERLIN-PATCH 2026-11-27 - Autowake-Beobachtung frisch starten: ab jetzt
+    // gilt "kein Flugzeug im Radius gesehen", bis einer auftaucht -> der erste
+    // das Bild betretende weckt den Schirm sofort (siehe loop() unten).
+    lastInRangeSightingMs = 0;
     screenDimmed = true;
     ledcWrite(BACKLIGHT_PWM_CHANNEL, screensaverBacklightPwm());
     tft.fillScreen(TFT_BLACK);
@@ -2505,19 +2509,44 @@ void loop() {
         bool haveNearest = nearestAircraft(nearestKm);
         float trigKm = autoWakeRadiusKm();
         bool inRange = haveNearest && nearestKm <= trigKm;
+        // MERLIN-PATCH 2026-11-27 - BUGFIX (eigener Fehler von vorhin): der
+        // "seit Eintritt noch nichts im Radius gesehen"-Zustand muss VOR der
+        // Aktualisierung von lastInRangeSightingMs abgefragt werden. Vorher
+        // stand zuerst "if (inRange) lastInRangeSightingMs = nowMs;" und danach
+        // die Pruefung "lastInRangeSightingMs == 0" - die ist dann per Bauweise
+        // false, sobald wirklich ein Flugzeug im Radius steht, also genau in
+        // dem Moment, in dem geweckt werden soll. Folge im Log 27.11. 14:09:
+        // Ruhebildschirm begonnen, 1-2 Flugzeuge im 10-km-Ring, KEIN Wecken.
+        bool seenSinceEntry = (lastInRangeSightingMs != 0);
         if (inRange) {
             lastInRangeSightingMs = nowMs;
         }
 
-        // Wecken: nur aus dem Ruhebildschirm heraus, und nur wenn die Luft
-        // vorher mindestens HYSTERESIS lang leer war - sonst wuerde der Radar
-        // sofort wieder anspringen, nachdem der Timeout ihn gerade erst
-        // schlafen gelegt hat, solange in der Naehe Verkehr ist.
-        if (screensaverShowing && inRange &&
-            (lastInRangeSightingMs == 0 ||
-             nowMs - lastInRangeSightingMs >= Config::AUTOWAKE_HYSTERESIS_MS)) {
+        // Wecken: NUR aus dem Ruhebildschirm heraus, und NUR wenn seit dem
+        // Eintritt in den Ruhebildschirm noch KEIN Flugzeug innerhalb des Radius
+        // gesehen wurde (lastInRangeSightingMs == 0, wird beim Eintritt auf 0
+        // gesetzt). Damit ist der Gruender-Wunsch woertlich erfuellt: "when an
+        // aircraft comes in the 10km range -> go from screen saver to radar
+        // mode" - ein Strich INS Bild weckt sofort (spaeetestens nach dem
+        // naechsten ADS-B-Abruf, ~10 s). Die Hysterese gehoert nur in die ANDERE
+        // Richtung (Radar -> Ruhebildschirm, siehe autoWakeExpired unten): sie
+        // verhindert ein Flackern, wenn ein Flugzeug den Radiusrand ueberquert.
+        // (Vorversion forderte zusaetzlich "30 s leer" VORM Wecken - das hielt
+        // den Schirm dauerhaft im Ruhebildschirm, solange der Luftraum nicht
+        // komplett leer war; gemessen 27.11. 13:45: Ruhebildschirm bei 2-4
+        // Flugzeugen im 10-km-Ring und KEIN Wecken.)
+        if (screensaverShowing && inRange && !seenSinceEntry) {
             screensaverShowing = false;
             screenDimmed = false;
+            // MERLIN-PATCH 2026-11-27 - BUGFIX (im Log 27.11. 14:20 als sekunden-
+            // schnelles Flackern sichtbar: 300+ "begonnen/verlassen"-Paare in
+            // einer Minute): der Autowake hat lastInteractionMs NICHT
+            // zurueckgesetzt, damit blieb idleTimeoutHit in der Timeout-Logik
+            // unten dauerhaft true -> derselbe Tick hat den Schirm sofort wieder
+            // in den Ruhebildschirm geschickt (Timeout sieht "seit 190 s nicht
+            // angefasst") und der naechste Loop hat wieder geweckt. Ein Autowake
+            // gilt hier als frische Aktivitaet - genau so, wie ein Tippen es tut.
+            lastInteractionMs = nowMs;
             bool shouldNightDim = SettingsStore::nightDimmingEnabled() && isNightDimHours();
             ledcWrite(BACKLIGHT_PWM_CHANNEL, shouldNightDim ? nightDimBacklightPwm() : normalBacklightPwm());
             nightDimActive = shouldNightDim;
