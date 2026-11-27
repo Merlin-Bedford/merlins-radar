@@ -318,6 +318,17 @@ bool nightDimActive = false;
 bool screensaverShowing = false;
 uint32_t lastScreensaverClockMs = 0;
 
+// MERLIN-PATCH 2026-11-27 - AUTOWAKE aus dem Ruhebildschirm (Founder-Wunsch):
+// Ruhezustand -> Flugzeug innerhalb der Reichweite -> Radarbild -> alles
+// ausserhalb -> zurueck zum Ruhebildschirm. autoWakeActive NUR true, wenn der
+// aktuelle Radar-Betrieb VOM AUTOWAKE kommt (ein manueller Tap-Ueber dem
+// Bildschirm-Timeout fuehrt weiter wie bisher den klassischen Inaktivitaets-
+// Timeout aus, siehe loop()). lastInRangeSightingMs haelt den Zeitpunkt der
+// letzten Sichtung innerhalb des Aktivierungsradius (0 = noch nie) und liefert
+// die Hysterese in beide Richtungen.
+bool autoWakeActive = false;
+uint32_t lastInRangeSightingMs = 0;
+
 // Wandelt die Nutzer-Helligkeit (Menue > System > Helligkeit, 10-100%) in
 // einen PWM-Wert 0-255 um - ersetzt das bisher fest verdrahtete
 // BACKLIGHT_FULL als "normale" Helligkeit ueberall unten. Bei aktiver
@@ -1030,6 +1041,43 @@ void drawScreensaverClock() {
 String lastScreensaverAircraftText;
 constexpr int16_t SCREENSAVER_AIRCRAFT_ICON_ARM = 4;
 
+// MERLIN-PATCH 2026-11-27 - Helfer fuer den Autowake (Deklaration der beiden
+// Zustandsvariablen weiter oben bei screensaverShowing):
+// nearestAircraft() - true + Distanz des naechsten bekannten Flugzeugs. Die
+// Tabelle ist nach postFetchUpdate() aufsteigend nach Distanz sortiert
+// (aircraft_table.cpp), Index 0 ist also bereits das naechste - kein eigener
+// Min-Scan noetig (dasselbe Muster wie drawScreensaverNearestAircraft() unten).
+// Wird im Sekundentakt befuellt, UNABHAENGIG davon, was gerade angezeigt wird.
+bool nearestAircraft(float& outDistKm) {
+    AircraftTable::lock();
+    Aircraft* table = AircraftTable::raw();
+    bool have = table[0].valid;
+    float d = table[0].distanceKm;
+    AircraftTable::unlock();
+    outDistKm = d;
+    return have;
+}
+
+// Aktivierungsradius: 0 in Config::AUTOWAKE_TRIGGER_RADIUS_KM bedeutet "nimm
+// die aktuell eingestellte Radar-Reichweite" (der Founder nutzt 10 km). Der
+// Reichweiten-Knopf ist zugleich der Abrufradius der ADS-B-Abfrage - ein
+// Aktivierungsradius oberhalb des Abradius waere sinnfrei, Flugzeuge ausserhalb
+// des Abradius sieht das Geraet schlicht nicht.
+float autoWakeRadiusKm() {
+    if (Config::AUTOWAKE_TRIGGER_RADIUS_KM > 0.0f) {
+        return Config::AUTOWAKE_TRIGGER_RADIUS_KM;
+    }
+    // gleiches Muster wie net_task.cpp: Reichweite = Stufenauswahl des
+    // Reichweiten-Knopfs (10/25/50/100 km, Config::RANGE_STEPS_KM).
+    uint8_t idx = SettingsStore::rangeIndex();
+    if (idx >= Config::RANGE_STEP_COUNT) idx = Config::RANGE_STEP_COUNT - 1;
+    return Config::RANGE_STEPS_KM[idx];
+}
+
+// MERLIN-PATCH 2026-11-27 - Hinweis: der Ruhebildschirm-Eintritt
+// (enterScreensaver()) liegt weiter UNTERHALB dieses Blocks, erst nach den
+// Screensaver-Regen/-Schnee-Namespaces - deren reset() wird dort gebraucht.
+
 void drawScreensaverNearestAircraft() {
     AircraftTable::lock();
     Aircraft* table = AircraftTable::raw();
@@ -1526,6 +1574,26 @@ namespace ScreensaverSnow {
             }
         }
     }
+}
+
+// MERLIN-PATCH 2026-11-27 - Ruhebildschirm-Eintritt als eigene Funktion
+// (vorher ein Block in loop()); wird jetzt vom Inaktivitaets-Timeout ODER vom
+// Autowake-Reset benutzt, damit beide Pfade garantiert identisch aufraeumen.
+void enterScreensaver() {
+    screensaverShowing = true;
+    screenDimmed = true;
+    ledcWrite(BACKLIGHT_PWM_CHANNEL, screensaverBacklightPwm());
+    tft.fillScreen(TFT_BLACK);
+    MenuStars::reset();
+    ScreensaverRain::reset();
+    ScreensaverSnow::reset();
+    drawScreensaverLogo();
+    drawScreensaverVersion();
+    lastScreensaverTimeText = "";
+    lastScreensaverDateText = "";
+    lastScreensaverAircraftText = "";
+    lastScreensaverThemeIndex = SettingsStore::radarThemeIndex();
+    lastScreensaverClockMs = 0; // sofortiges erstes Zeichnen erzwingen
 }
 
 void updateWifiIcon() {
@@ -2295,6 +2363,11 @@ void loop() {
                 updateStatusLine();
                 forceRedraw = true;
             }
+            // MERLIN-PATCH 2026-11-27: ein manueller Tap beendet jeden
+            // Autowake-Zustand - ab jetzt gilt wieder der normale
+            // Inaktivitaets-Timeout (lastInteractionMs wurde oben gesetzt),
+            // nicht die Autowake-Logik.
+            autoWakeActive = false;
         }
     }
 
@@ -2409,6 +2482,43 @@ void loop() {
 
     RadarScreen::updateProximityAlert(nowMs);
 
+    // MERLIN-PATCH 2026-11-27 - AUTOWAKE (Founder-Wunsch 12:25): Ruhebildschirm
+    // -> Flugzeug innerhalb der eingestellten Reichweite -> Radarbild; verlasst
+    // das letzte Flugzeug den Radius, geht der Bildschirm zurueck zum
+    // Ruhebildschirm. Die Beobachtung laeuft jeden Loop-Durchlauf (die
+    // AircraftTable wird von NetTask auf Core 0 auch im Ruhebildschirm
+    // weitergefuettert), geschaltet wird nur zwischen den beiden Zustaenden.
+    {
+        float nearestKm = 0.0f;
+        bool haveNearest = nearestAircraft(nearestKm);
+        float trigKm = autoWakeRadiusKm();
+        bool inRange = haveNearest && nearestKm <= trigKm;
+        if (inRange) {
+            lastInRangeSightingMs = nowMs;
+        }
+
+        // Wecken: nur aus dem Ruhebildschirm heraus, und nur wenn die Luft
+        // vorher mindestens HYSTERESIS lang leer war - sonst wuerde der Radar
+        // sofort wieder anspringen, nachdem der Timeout ihn gerade erst
+        // schlafen gelegt hat, solange in der Naehe Verkehr ist.
+        if (screensaverShowing && inRange &&
+            (lastInRangeSightingMs == 0 ||
+             nowMs - lastInRangeSightingMs >= Config::AUTOWAKE_HYSTERESIS_MS)) {
+            screensaverShowing = false;
+            screenDimmed = false;
+            bool shouldNightDim = SettingsStore::nightDimmingEnabled() && isNightDimHours();
+            ledcWrite(BACKLIGHT_PWM_CHANNEL, shouldNightDim ? nightDimBacklightPwm() : normalBacklightPwm());
+            nightDimActive = shouldNightDim;
+            autoWakeActive = true;
+            RadarScreen::invalidatePanel();
+            drawHeader();
+            updateStatusLine();
+            forceRedraw = true;
+            Serial.printf("[AutoWake] Ruhebildschirm verlassen - naechstes Flugzeug %.1f km (Radius %.0f km)\n",
+                          nearestKm, trigKm);
+        }
+    }
+
     // Proaktiver Hinweis-Screen, sobald das Flugbuch durch die 24h-
     // Sicherheitsabschaltung deaktiviert wurde (siehe FlightLogbook::
     // consumeAutoOffNotice()) - deckt BEIDE Ausloeser mit demselben
@@ -2463,28 +2573,30 @@ void loop() {
     }
 
     uint8_t timeoutMin = SettingsStore::screenTimeoutMinutes();
-    if (!screenDimmed && timeoutMin > 0) {
+    // MERLIN-PATCH 2026-11-27 - Autowake-Reset: ist der Bildschirm nur wegen
+    // eines Autowake wach und ist seit HYSTERESIS ms kein Flugzeug mehr
+    // innerhalb des Radius,zurueck in den Ruhebildschirm (derselbe
+    // Eintrittspfad wie der Inaktivitaets-Timeout, siehe enterScreensaver()).
+    bool autoWakeExpired = autoWakeActive && lastInRangeSightingMs != 0 &&
+                           nowMs - lastInRangeSightingMs >= Config::AUTOWAKE_HYSTERESIS_MS;
+    if (!screenDimmed && (timeoutMin > 0 || autoWakeActive)) {
         uint32_t timeoutMs = (uint32_t)timeoutMin * 60000UL;
-        if (nowMs - lastInteractionMs >= timeoutMs) {
+        bool idleTimeoutHit = (timeoutMin > 0) && (nowMs - lastInteractionMs >= timeoutMs);
+        if (idleTimeoutHit || autoWakeExpired) {
             if (SettingsStore::screensaverEnabled()) {
                 // Ruhebildschirm statt komplett dunkel (Menue > System >
                 // Ruhebildschirm, AUS per Default) - gedimmter
                 // Sternenhimmel mit grosser Uhrzeit statt des Backlights
                 // ganz aus, fuer alle, die trotz Inaktivitaets-Timeout noch
-                // etwas auf dem Display sehen wollen.
-                screensaverShowing = true;
-                ledcWrite(BACKLIGHT_PWM_CHANNEL, screensaverBacklightPwm());
-                tft.fillScreen(TFT_BLACK);
-                MenuStars::reset();
-                ScreensaverRain::reset();
-                ScreensaverSnow::reset();
-                drawScreensaverLogo();
-                drawScreensaverVersion();
-                lastScreensaverTimeText = "";
-                lastScreensaverDateText = "";
-                lastScreensaverAircraftText = "";
-                lastScreensaverThemeIndex = SettingsStore::radarThemeIndex();
-                lastScreensaverClockMs = 0; // sofortiges erstes Zeichnen erzwingen
+                // etwas auf dem Display sehen wollen. MERLIN-PATCH 2026-11-27:
+                // Eintritt ausgelagert in enterScreensaver(), damit Timeout und
+                // Autowake-Reset garantiert identisch vorgehen.
+                enterScreensaver();
+                if (autoWakeExpired) {
+                    autoWakeActive = false;
+                    Serial.printf("[AutoWake] zurueck zum Ruhebildschirm - seit %lums kein Flugzeug innerhalb %.0f km\n",
+                                  (unsigned long)(nowMs - lastInRangeSightingMs), autoWakeRadiusKm());
+                }
             } else {
                 // Bewusst ganz aus (0) statt nur gedimmt - fuer den
                 // Bildschirm-Timeout (Menue > System > Timeout). Dimmen

@@ -84,6 +84,19 @@ namespace Config {
     // gleiches Prinzip wie NIGHT_DIM_REDUCTION_PERCENT.
     constexpr uint8_t SCREENSAVER_DIM_REDUCTION_PERCENT = 75;
 
+    // MERLIN-PATCH 2026-11-27 - AUTOWAKE aus dem Ruhebildschirm (Founder-
+    // Wunsch, 12:25): "...anytime an aircraft comes in the 10km range, then go
+    // from screen saver to radar mode, then when aircraft leaves the 10km,
+    // switch back to screensaver."
+    // Schwelle = 0 => die Aktuell eingestellte Radar-Reichweite (10/25/50/100 km)
+    // dient als Aktivierungsradius; ein Wert > 0 uebersteuert ihn fest in km.
+    constexpr float AUTOWAKE_TRIGGER_RADIUS_KM = 0.0f;
+    // Traegheit (Hysterese) in beide Richtungen: ein Weckvorgang startet erst,
+    // nachdem die Luft so lange leer war, und der Radar bleibt so lange stehen,
+    // nachdem das letzte Flugzeug den Radius verlassen hat - verhindert ein
+    // Hin-und-her-Schalten (Flackern) an der Radiusgrenze.
+    constexpr uint32_t AUTOWAKE_HYSTERESIS_MS = 30000UL;
+
     constexpr const char* IP_GEO_HOST = "ip-api.com";
     constexpr const char* IP_GEO_PATH = "/json/?fields=status,lat,lon,offset,countryCode";
 
